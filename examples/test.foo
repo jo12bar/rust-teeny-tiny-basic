@@ -1,0 +1,6 @@
+let five = 5;
+let eight = 3 + five;
+fn sub x y = add(x, -y);
+let foo = sub(five, eight);
+fn add x y = x + y;
+sub(five, eight)
