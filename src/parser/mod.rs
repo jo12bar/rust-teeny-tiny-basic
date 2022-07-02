@@ -1,94 +1,75 @@
-use crate::ast::Expr;
+mod expr;
+
+use crate::{
+    ast::{Expr, Func},
+    lexer::token::Token,
+};
 use chumsky::prelude::*;
+use std::collections::HashMap;
 
-pub mod token;
+pub use expr::parse_expr;
 
-pub fn parser() -> impl Parser<char, Expr, Error = Simple<char>> {
-    let ident = text::ident().padded();
-
-    let expr = recursive(|expr| {
-        let int = text::int(10)
-            .map(|s: String| Expr::Num(s.parse().unwrap()))
-            .padded();
-
-        // call is for when functions get called
-        let call = ident
-            .then(
-                expr.clone()
-                    .separated_by(just(','))
-                    .allow_trailing()
-                    .delimited_by(just('('), just(')')),
-            )
-            .map(|(f, args)| Expr::Call(f, args));
-
-        let atom = int
-            .or(expr.delimited_by(just('('), just(')')))
-            .or(call)
-            .or(ident.map(Expr::Var));
-
-        let op = |c| just(c).padded();
-
-        let unary = op('-')
-            .repeated()
-            .then(atom)
-            .foldr(|_op, rhs| Expr::Neg(Box::new(rhs)));
-
-        let product = unary
-            .clone()
-            .then(
-                op('*')
-                    .to(Expr::Mul as fn(_, _) -> _)
-                    .or(op('/').to(Expr::Div as fn(_, _) -> _))
-                    .then(unary)
-                    .repeated(),
-            )
-            .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)));
-
-        /* let sum = */
-        product
-            .clone()
-            .then(
-                op('+')
-                    .to(Expr::Add as fn(_, _) -> _)
-                    .or(op('-').to(Expr::Sub as fn(_, _) -> _))
-                    .then(product)
-                    .repeated(),
-            )
-            .foldl(|lhs, (op, rhs)| op(Box::new(lhs), Box::new(rhs)))
+/// Parse a function. Since nano-Rust currently doesn't allow any top-level
+/// statements other than functions, this is probably the best entry point
+/// into the parser system.
+///
+/// Outputs a hashmap from strings (function names) to the functions themselves.
+pub fn parse_func() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
+    // Match any identifiers
+    let ident = filter_map(|span, tok| match tok {
+        Token::Ident(ident) => Ok(ident),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
-    let decl = recursive(|decl| {
-        let r#let = text::keyword("let")
-            .ignore_then(ident) // variable name
-            .then_ignore(just('='))
-            .then(expr.clone()) // variable value
-            .then_ignore(just(';'))
-            .then(decl.clone()) // everything following variable decl
-            .map(|((name, rhs), then)| Expr::Let {
-                name,
-                rhs: Box::new(rhs),
-                then: Box::new(then),
-            });
+    // Argument lists are just identifiers separated by commas, surrounded by parentheses
+    let args = ident
+        .separated_by(just(Token::Ctrl(',')))
+        .allow_trailing()
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+        .labelled("function args");
 
-        let r#fn = text::keyword("fn")
-            .ignore_then(ident) // fn name
-            .then(ident.repeated()) // multiple arguments
-            .then_ignore(just('='))
-            .then(expr.clone()) // fn body
-            .then_ignore(just(';'))
-            .then(decl) // everything following fn decl
-            .map(|(((name, args), body), then)| Expr::Fn {
-                name,
-                args,
-                body: Box::new(body),
-                then: Box::new(then),
-            });
+    let func = just(Token::Fn)
+        // parse function name
+        .ignore_then(
+            ident
+                .map_with_span(|name, span| (name, span))
+                .labelled("function name"),
+        )
+        // parse argument list
+        .then(args)
+        // parse function body
+        .then(
+            parse_expr()
+                .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
+                // Attempt to recover with anythign that looks like a function
+                // body but contains errors
+                .recover_with(nested_delimiters(
+                    Token::Ctrl('{'),
+                    Token::Ctrl('}'),
+                    [
+                        (Token::Ctrl('('), Token::Ctrl(')')),
+                        (Token::Ctrl('['), Token::Ctrl(']')),
+                    ],
+                    |span| (Expr::Error, span),
+                )),
+        )
+        .map(|((name, args), body)| (name, Func { args, body }))
+        .labelled("function");
 
-        r#let
-            .or(r#fn)
-            .or(expr) // must be later in the chain than `r#let` to avoid ambiguity
-            .padded()
-    });
+    func.repeated()
+        .try_map(|fs, _| {
+            let mut funcs = HashMap::new();
 
-    decl.then_ignore(end())
+            for ((name, name_span), func) in fs {
+                if funcs.insert(name.clone(), func).is_some() {
+                    return Err(Simple::custom(
+                        name_span,
+                        format!("Function `{name}` already exists"),
+                    ));
+                }
+            }
+
+            Ok(funcs)
+        })
+        .then_ignore(end())
 }
