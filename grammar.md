@@ -36,15 +36,15 @@ Note that all alphabetic keywords are actually case-insensitive. However, **[ide
 
 ## _Numeric_Expression_
 
-::=&nbsp;[_Numeric_Product_Term_](#numericproductterm) {(`+` | `-`) [_Numeric_Product_Term_](#numericproductterm)}
+::=&nbsp;[_Numeric_Product_Term_](#numeric_product_term) {(`+` | `-`) [_Numeric_Product_Term_](#numeric_product_term)}
 
 ## _Numeric_Product_Term_
 
-::=&nbsp;[_Numeric_Unary_Term_](#numericunaryterm) {(`*` | `/`) [_Numeric_Unary_Term_](#numericunaryterm)}
+::=&nbsp;[_Numeric_Unary_Term_](#numeric_unary_term) {(`*` | `/`) [_Numeric_Unary_Term_](#numeric_unary_term)}
 
 ## _Numeric_Unary_Term_
 
-::=&nbsp;\[`+` | `-`\] [_Numeric_Primary_Term_](#numericprimaryterm)
+::=&nbsp;\[`+` | `-`\] [_Numeric_Primary_Term_](#numeric_primary_term)
 
 ## _Numeric_Primary_Term_
 
