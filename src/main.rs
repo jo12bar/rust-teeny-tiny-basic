@@ -16,9 +16,11 @@ fn main() -> Result<(), EyreReport> {
     let (tokens, errs) = lexer().parse_recovery(src.as_str());
 
     if let Some(tokens) = tokens {
-        for (token, src_span) in tokens {
+        for (token, src_span) in tokens.clone() {
             println!("{}\t->\t{token:?}", &src[src_span]);
         }
+
+        println!("{tokens:?}");
     }
 
     let error_iter = errs.into_iter().map(|e| e.map(|c| c.to_string()));
@@ -68,7 +70,7 @@ fn main() -> Result<(), EyreReport> {
                     } else {
                         err.expected()
                             .map(|expected| match expected {
-                                Some(expected) => expected.to_string(),
+                                Some(expected) => expected.escape_debug().collect::<String>(),
                                 None => "end of input".to_string(),
                             })
                             .collect::<Vec<_>>()
