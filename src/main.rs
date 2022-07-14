@@ -1,10 +1,12 @@
 mod lexer;
+mod parser;
 mod span;
 
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
-use chumsky::prelude::*;
+use chumsky::{prelude::*, Stream};
 use color_eyre::{eyre::eyre, Report as EyreReport, Section};
 use lexer::lexer;
+use parser::parser;
 use std::{env, fs};
 
 fn main() -> Result<(), EyreReport> {
@@ -12,22 +14,41 @@ fn main() -> Result<(), EyreReport> {
 
     let src = fs::read_to_string(env::args().nth(1).ok_or(eyre!("Expected file argument"))?)
         .section("Failed to read file.")?;
+    let src_len = src.chars().count();
 
-    let (tokens, errs) = lexer().parse_recovery(src.as_str());
+    let (tokens, lex_errs) = lexer().parse_recovery(src.as_str());
 
-    if let Some(tokens) = tokens {
-        for (token, src_span) in tokens.clone() {
-            println!("{}\t->\t{token:?}", &src[src_span]);
-        }
+    let (ast, parse_errs) = if let Some(tokens) = tokens {
+        parser().parse_recovery(Stream::from_iter(src_len..src_len + 1, tokens.into_iter()))
+    } else {
+        (None, vec![])
+    };
 
-        println!("{tokens:?}");
+    if let Some(ast) = ast {
+        println!("{ast:?}");
     }
 
-    let error_iter = errs.into_iter().map(|e| e.map(|c| c.to_string()));
+    let error_iter = lex_errs
+        .into_iter()
+        .map(|e| e.map(|c| c.to_string()))
+        .chain(parse_errs.into_iter().map(|e| e.map(|tok| tok.to_string())));
 
+    let has_errors = process_errors(error_iter, &src)?;
+
+    if has_errors {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn process_errors(
+    errs: impl IntoIterator<Item = Simple<String>>,
+    src: &str,
+) -> Result<bool, EyreReport> {
     let mut has_errors = false;
 
-    for err in error_iter {
+    for err in errs {
         has_errors = true;
 
         let report = Report::build(ReportKind::Error, (), err.span().start);
@@ -98,9 +119,5 @@ fn main() -> Result<(), EyreReport> {
         report.finish().eprint(Source::from(&src))?;
     }
 
-    if has_errors {
-        std::process::exit(1);
-    }
-
-    Ok(())
+    Ok(has_errors)
 }

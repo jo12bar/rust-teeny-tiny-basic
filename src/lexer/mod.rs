@@ -107,7 +107,7 @@ fn lex_string() -> impl Parser<char, Token, Error = Simple<char>> + Clone {
                 .or(just('t').to('\t'))
                 .or(just('u').ignore_then(
                     // unicode UTF-32 escapes
-                    filter(|c: &char| c.is_digit(16))
+                    filter(|c: &char| c.is_ascii_hexdigit())
                         .repeated()
                         .exactly(4)
                         .collect::<String>()
@@ -144,6 +144,8 @@ fn lex_op() -> impl Parser<char, Token, Error = Simple<char>> + Clone {
         .or(just('>').to(Token::Gt))
         .or(just('<').to(Token::Lt))
         .or(just('=').to(Token::Eq))
+        .or(just('(').to(Token::LParen))
+        .or(just(')').to(Token::RParen))
 }
 
 /// Lexes an identifier or keyword.

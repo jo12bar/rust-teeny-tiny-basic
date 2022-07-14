@@ -36,6 +36,10 @@ pub enum Token {
     LtEq,
     Gt,
     GtEq,
+
+    // Various brackets
+    LParen,
+    RParen,
 }
 
 impl fmt::Display for Token {
@@ -67,6 +71,8 @@ impl fmt::Display for Token {
             Token::LtEq => write!(f, "<="),
             Token::Gt => write!(f, ">"),
             Token::GtEq => write!(f, ">="),
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
         }
     }
 }
